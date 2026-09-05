@@ -6,6 +6,8 @@ import { discountRuleRoutes } from "./discountRuleRoutes";
 import { approvalRoutes } from "./approvalRoutes";
 import { portalRoutes } from "./portalRoutes";
 import { auditLogRoutes } from "./auditLogRoutes";
+import { quotationRoutes } from "./quotationRoutes";
+import { dealHealthRoutes } from "./dealHealthRoutes";
 
 export function mountAllRoutes(app: Express): void {
   app.use("/api/auth", authRoutes);
@@ -15,4 +17,6 @@ export function mountAllRoutes(app: Express): void {
   app.use("/api/approvals", approvalRoutes);
   app.use("/api/portal", portalRoutes);
   app.use("/api/audit-logs", auditLogRoutes);
+  app.use("/api/quotations", quotationRoutes);
+  app.use("/api/deal-health", dealHealthRoutes);
 }
