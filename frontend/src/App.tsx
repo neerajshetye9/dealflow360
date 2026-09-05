@@ -3,6 +3,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 // Neeraj Pages
 import { Login } from './pages/Login';
@@ -35,62 +36,126 @@ export const App: React.FC = () => {
           <Navbar />
           <main style={{ flex: 1 }}>
             <Routes>
-              {/* Default redirect to Dashboard */}
+              {/* Default Redirect */}
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-              {/* S1: Login & Auth (Neeraj) */}
+              {/* S1: Role-Tailored Login & Registration */}
               <Route path="/login" element={<Login />} />
 
-              {/* S2: Dashboard (Atharva) */}
-              <Route path="/dashboard" element={<Dashboard />} />
+              {/* S2: Dashboard (Rep, Manager, Finance, Admin) */}
+              <Route path="/dashboard" element={
+                <ProtectedRoute allowedRoles={['sales_rep', 'sales_manager', 'finance_director', 'admin']}>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
 
-              {/* S3: Quotations Kanban (Atharva) */}
-              <Route path="/quotations" element={<QuotationsKanban />} />
+              {/* S3: Quotations Kanban (Rep, Manager, Admin) */}
+              <Route path="/quotations" element={
+                <ProtectedRoute allowedRoles={['sales_rep', 'sales_manager', 'admin']}>
+                  <QuotationsKanban />
+                </ProtectedRoute>
+              } />
 
-              {/* S4: Quotation Detail & Upsell Engine (Atharva) */}
-              <Route path="/quotations/:id" element={<QuotationDetail />} />
+              {/* S4: Quotation Detail & Upsell Engine (Rep, Manager, Admin) */}
+              <Route path="/quotations/:id" element={
+                <ProtectedRoute allowedRoles={['sales_rep', 'sales_manager', 'admin']}>
+                  <QuotationDetail />
+                </ProtectedRoute>
+              } />
 
-              {/* S5: Approvals List (Neeraj) */}
-              <Route path="/approvals" element={<ApprovalsList />} />
+              {/* S5: Approvals Queue (Manager, Finance Director, Admin) */}
+              <Route path="/approvals" element={
+                <ProtectedRoute allowedRoles={['sales_manager', 'finance_director', 'admin']}>
+                  <ApprovalsList />
+                </ProtectedRoute>
+              } />
 
-              {/* S6: Approval Detail & Governance Audit (Neeraj) */}
-              <Route path="/approvals/:id" element={<ApprovalDetail />} />
+              {/* S6: Approval Review (Manager, Finance Director, Admin) */}
+              <Route path="/approvals/:id" element={
+                <ProtectedRoute allowedRoles={['sales_manager', 'finance_director', 'admin']}>
+                  <ApprovalDetail />
+                </ProtectedRoute>
+              } />
 
-              {/* S7: Fulfillment List & Warehouses (Vignesh) */}
-              <Route path="/fulfillment" element={<FulfillmentList />} />
+              {/* S7: Fulfillment List (Finance Director, Admin) */}
+              <Route path="/fulfillment" element={
+                <ProtectedRoute allowedRoles={['finance_director', 'admin']}>
+                  <FulfillmentList />
+                </ProtectedRoute>
+              } />
 
-              {/* S8: Fulfillment Detail & Warehouse Split (Vignesh) */}
-              <Route path="/fulfillment/:id" element={<FulfillmentDetail />} />
+              {/* S8: Fulfillment Detail & Warehouse Split (Finance Director, Admin) */}
+              <Route path="/fulfillment/:id" element={
+                <ProtectedRoute allowedRoles={['finance_director', 'admin']}>
+                  <FulfillmentDetail />
+                </ProtectedRoute>
+              } />
 
-              {/* S9: Subscriptions List (Vignesh) */}
-              <Route path="/subscriptions" element={<SubscriptionsList />} />
+              {/* S9: Subscriptions List (Finance Director, Admin) */}
+              <Route path="/subscriptions" element={
+                <ProtectedRoute allowedRoles={['finance_director', 'admin']}>
+                  <SubscriptionsList />
+                </ProtectedRoute>
+              } />
 
-              {/* S10: Billing Detail & Proration (Vignesh) */}
-              <Route path="/subscriptions/:id" element={<BillingDetail />} />
+              {/* S10: Billing Detail & Proration (Finance Director, Admin) */}
+              <Route path="/subscriptions/:id" element={
+                <ProtectedRoute allowedRoles={['finance_director', 'admin']}>
+                  <BillingDetail />
+                </ProtectedRoute>
+              } />
 
-              {/* S11: Customer Negotiation Portal (Neeraj) */}
+              {/* S11: Customer Negotiation Portal (Accessible to all with portal token or customer role) */}
               <Route path="/portal/:token" element={<CustomerPortal />} />
 
-              {/* S12: Invoices List (Vignesh) */}
-              <Route path="/invoices" element={<InvoicesList />} />
+              {/* S12: Invoices List (Finance Director, Admin) */}
+              <Route path="/invoices" element={
+                <ProtectedRoute allowedRoles={['finance_director', 'admin']}>
+                  <InvoicesList />
+                </ProtectedRoute>
+              } />
 
-              {/* S13: Invoice Detail (Vignesh) */}
-              <Route path="/invoices/:id" element={<InvoiceDetail />} />
+              {/* S13: Invoice Detail & Payment (Finance Director, Admin) */}
+              <Route path="/invoices/:id" element={
+                <ProtectedRoute allowedRoles={['finance_director', 'admin']}>
+                  <InvoiceDetail />
+                </ProtectedRoute>
+              } />
 
-              {/* S14: Deal Health Monitor & Alerts (Atharva) */}
-              <Route path="/deal-health" element={<DealHealth />} />
+              {/* S14: Deal Health Monitor & Alerts (Manager, Finance Director, Admin) */}
+              <Route path="/deal-health" element={
+                <ProtectedRoute allowedRoles={['sales_manager', 'finance_director', 'admin']}>
+                  <DealHealth />
+                </ProtectedRoute>
+              } />
 
-              {/* S15: Executive Reports & Analytics (Vignesh) */}
-              <Route path="/reports" element={<Reports />} />
+              {/* S15: Executive Reports (Manager, Finance Director, Admin) */}
+              <Route path="/reports" element={
+                <ProtectedRoute allowedRoles={['sales_manager', 'finance_director', 'admin']}>
+                  <Reports />
+                </ProtectedRoute>
+              } />
 
-              {/* S16: Product Catalog (Neeraj) */}
-              <Route path="/products" element={<ProductCatalog />} />
+              {/* S16: Product Catalog (Rep, Manager, Admin) */}
+              <Route path="/products" element={
+                <ProtectedRoute allowedRoles={['sales_rep', 'sales_manager', 'admin']}>
+                  <ProductCatalog />
+                </ProtectedRoute>
+              } />
 
-              {/* S17: Product Detail (Neeraj) */}
-              <Route path="/products/:id" element={<ProductCatalog />} />
+              {/* S17: Product Detail (Rep, Manager, Admin) */}
+              <Route path="/products/:id" element={
+                <ProtectedRoute allowedRoles={['sales_rep', 'sales_manager', 'admin']}>
+                  <ProductCatalog />
+                </ProtectedRoute>
+              } />
 
-              {/* S18: Discount Governance Configuration (Neeraj) */}
-              <Route path="/admin/discount-config" element={<DiscountConfig />} />
+              {/* S18: Discount Governance Config (Admin ONLY) */}
+              <Route path="/admin/discount-config" element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <DiscountConfig />
+                </ProtectedRoute>
+              } />
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -1,11 +1,19 @@
 
-export type UserRole = 'sales_rep' | 'sales_manager' | 'finance_director' | 'admin';
+export type UserRole = 'sales_rep' | 'sales_manager' | 'finance_director' | 'admin' | 'customer';
 
 export interface User {
   id: string;
   email: string;
   fullName: string;
   role: UserRole;
+  territory?: string;
+  quota?: number;
+  division?: string;
+  approvalLimit?: number;
+  department?: string;
+  costCenter?: string;
+  companyName?: string;
+  portalToken?: string;
 }
 
 export interface QuotationLine {

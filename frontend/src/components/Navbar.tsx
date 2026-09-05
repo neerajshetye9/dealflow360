@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { 
@@ -13,24 +13,53 @@ import {
   Box, 
   Sliders, 
   UserCheck, 
-  ExternalLink 
+  ExternalLink,
+  LogOut,
+  ChevronDown
 } from 'lucide-react';
+import { Badge } from './Badge';
 
 export const Navbar: React.FC = () => {
-  const { role, switchRole, user } = useAuth();
+  const { role, switchRole, user, logout, hasAccess } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isPortal = location.pathname.startsWith('/portal');
   if (isPortal) return null;
 
   const isActive = (path: string) => location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const getRoleBadgeVariant = (r: UserRole) => {
+    switch (r) {
+      case 'sales_rep': return 'info';
+      case 'sales_manager': return 'warning';
+      case 'finance_director': return 'success';
+      case 'admin': return 'danger';
+      case 'customer': return 'neutral';
+    }
+  };
+
+  const getRoleLabel = (r: UserRole) => {
+    switch (r) {
+      case 'sales_rep': return 'Sales Rep';
+      case 'sales_manager': return 'Sales Manager';
+      case 'finance_director': return 'Finance Dir';
+      case 'admin': return 'Admin';
+      case 'customer': return 'Customer';
+    }
+  };
+
   return (
     <header style={{
       position: 'sticky',
       top: 0,
       zIndex: 50,
-      background: 'rgba(10, 13, 20, 0.85)',
+      background: 'rgba(10, 13, 20, 0.88)',
       backdropFilter: 'blur(20px)',
       borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
       padding: '0 24px'
@@ -69,131 +98,177 @@ export const Navbar: React.FC = () => {
           </Link>
         </div>
 
-        {/* Domain Navigation Clusters */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {/* Workspace (Atharva) */}
-          <Link to="/dashboard" className="btn btn-secondary btn-sm" style={{
-            background: isActive('/dashboard') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            borderColor: isActive('/dashboard') ? 'var(--accent-primary)' : 'transparent',
-            color: isActive('/dashboard') ? '#fff' : 'var(--text-secondary)'
-          }}>
-            <BarChart3 size={15} /> Dashboard
-          </Link>
+        {/* Dynamic Navigation Tabs (Filtered by Role Permissions) */}
+        <nav style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {/* Dashboard: Rep, Manager, Finance, Admin */}
+          {hasAccess(['sales_rep', 'sales_manager', 'finance_director', 'admin']) && (
+            <Link to="/dashboard" className="btn btn-secondary btn-sm" style={{
+              background: isActive('/dashboard') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              borderColor: isActive('/dashboard') ? 'var(--accent-primary)' : 'transparent',
+              color: isActive('/dashboard') ? '#fff' : 'var(--text-secondary)'
+            }}>
+              <BarChart3 size={15} /> Dashboard
+            </Link>
+          )}
 
-          <Link to="/quotations" className="btn btn-secondary btn-sm" style={{
-            background: isActive('/quotations') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            borderColor: isActive('/quotations') ? 'var(--accent-primary)' : 'transparent',
-            color: isActive('/quotations') ? '#fff' : 'var(--text-secondary)'
-          }}>
-            <Layers size={15} /> Quotes Kanban
-          </Link>
+          {/* Quotations: Rep, Manager, Admin */}
+          {hasAccess(['sales_rep', 'sales_manager', 'admin']) && (
+            <Link to="/quotations" className="btn btn-secondary btn-sm" style={{
+              background: isActive('/quotations') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              borderColor: isActive('/quotations') ? 'var(--accent-primary)' : 'transparent',
+              color: isActive('/quotations') ? '#fff' : 'var(--text-secondary)'
+            }}>
+              <Layers size={15} /> Quotes
+            </Link>
+          )}
 
-          <Link to="/deal-health" className="btn btn-secondary btn-sm" style={{
-            background: isActive('/deal-health') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            borderColor: isActive('/deal-health') ? 'var(--accent-primary)' : 'transparent',
-            color: isActive('/deal-health') ? '#fff' : 'var(--text-secondary)'
-          }}>
-            <Activity size={15} /> Deal Health
-          </Link>
+          {/* Approvals: Manager, Finance, Admin */}
+          {hasAccess(['sales_manager', 'finance_director', 'admin']) && (
+            <Link to="/approvals" className="btn btn-secondary btn-sm" style={{
+              background: isActive('/approvals') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              borderColor: isActive('/approvals') ? 'var(--accent-primary)' : 'transparent',
+              color: isActive('/approvals') ? '#fff' : 'var(--text-secondary)'
+            }}>
+              <ShieldCheck size={15} /> Approvals
+            </Link>
+          )}
 
-          <div style={{ width: 1, height: 20, background: 'var(--border-subtle)', margin: '0 4px' }} />
+          {/* Deal Health: Manager, Finance, Admin */}
+          {hasAccess(['sales_manager', 'finance_director', 'admin']) && (
+            <Link to="/deal-health" className="btn btn-secondary btn-sm" style={{
+              background: isActive('/deal-health') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              borderColor: isActive('/deal-health') ? 'var(--accent-primary)' : 'transparent',
+              color: isActive('/deal-health') ? '#fff' : 'var(--text-secondary)'
+            }}>
+              <Activity size={15} /> Deal Health
+            </Link>
+          )}
 
-          {/* Governance (Neeraj) */}
-          <Link to="/approvals" className="btn btn-secondary btn-sm" style={{
-            background: isActive('/approvals') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            borderColor: isActive('/approvals') ? 'var(--accent-primary)' : 'transparent',
-            color: isActive('/approvals') ? '#fff' : 'var(--text-secondary)'
-          }}>
-            <ShieldCheck size={15} /> Approvals
-          </Link>
+          {/* Product Catalog: Rep, Manager, Admin */}
+          {hasAccess(['sales_rep', 'sales_manager', 'admin']) && (
+            <Link to="/products" className="btn btn-secondary btn-sm" style={{
+              background: isActive('/products') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              borderColor: isActive('/products') ? 'var(--accent-primary)' : 'transparent',
+              color: isActive('/products') ? '#fff' : 'var(--text-secondary)'
+            }}>
+              <Box size={15} /> Products
+            </Link>
+          )}
 
-          <Link to="/products" className="btn btn-secondary btn-sm" style={{
-            background: isActive('/products') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            borderColor: isActive('/products') ? 'var(--accent-primary)' : 'transparent',
-            color: isActive('/products') ? '#fff' : 'var(--text-secondary)'
-          }}>
-            <Box size={15} /> Products
-          </Link>
+          {/* Fulfillment: Finance, Admin */}
+          {hasAccess(['finance_director', 'admin']) && (
+            <Link to="/fulfillment" className="btn btn-secondary btn-sm" style={{
+              background: isActive('/fulfillment') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              borderColor: isActive('/fulfillment') ? 'var(--accent-primary)' : 'transparent',
+              color: isActive('/fulfillment') ? '#fff' : 'var(--text-secondary)'
+            }}>
+              <Truck size={15} /> Fulfillment
+            </Link>
+          )}
 
-          <Link to="/admin/discount-config" className="btn btn-secondary btn-sm" style={{
-            background: isActive('/admin/discount-config') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            borderColor: isActive('/admin/discount-config') ? 'var(--accent-primary)' : 'transparent',
-            color: isActive('/admin/discount-config') ? '#fff' : 'var(--text-secondary)'
-          }}>
-            <Sliders size={15} /> Discount Rules
-          </Link>
+          {/* Subscriptions: Finance, Admin */}
+          {hasAccess(['finance_director', 'admin']) && (
+            <Link to="/subscriptions" className="btn btn-secondary btn-sm" style={{
+              background: isActive('/subscriptions') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              borderColor: isActive('/subscriptions') ? 'var(--accent-primary)' : 'transparent',
+              color: isActive('/subscriptions') ? '#fff' : 'var(--text-secondary)'
+            }}>
+              <FileText size={15} /> Subscriptions
+            </Link>
+          )}
 
-          <div style={{ width: 1, height: 20, background: 'var(--border-subtle)', margin: '0 4px' }} />
+          {/* Invoices: Finance, Admin */}
+          {hasAccess(['finance_director', 'admin']) && (
+            <Link to="/invoices" className="btn btn-secondary btn-sm" style={{
+              background: isActive('/invoices') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              borderColor: isActive('/invoices') ? 'var(--accent-primary)' : 'transparent',
+              color: isActive('/invoices') ? '#fff' : 'var(--text-secondary)'
+            }}>
+              Invoices
+            </Link>
+          )}
 
-          {/* Operations & Billing (Vignesh) */}
-          <Link to="/fulfillment" className="btn btn-secondary btn-sm" style={{
-            background: isActive('/fulfillment') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            borderColor: isActive('/fulfillment') ? 'var(--accent-primary)' : 'transparent',
-            color: isActive('/fulfillment') ? '#fff' : 'var(--text-secondary)'
-          }}>
-            <Truck size={15} /> Fulfillment
-          </Link>
+          {/* Reports: Manager, Finance, Admin */}
+          {hasAccess(['sales_manager', 'finance_director', 'admin']) && (
+            <Link to="/reports" className="btn btn-secondary btn-sm" style={{
+              background: isActive('/reports') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              borderColor: isActive('/reports') ? 'var(--accent-primary)' : 'transparent',
+              color: isActive('/reports') ? '#fff' : 'var(--text-secondary)'
+            }}>
+              Reports
+            </Link>
+          )}
 
-          <Link to="/subscriptions" className="btn btn-secondary btn-sm" style={{
-            background: isActive('/subscriptions') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            borderColor: isActive('/subscriptions') ? 'var(--accent-primary)' : 'transparent',
-            color: isActive('/subscriptions') ? '#fff' : 'var(--text-secondary)'
-          }}>
-            <FileText size={15} /> Subscriptions
-          </Link>
-
-          <Link to="/invoices" className="btn btn-secondary btn-sm" style={{
-            background: isActive('/invoices') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            borderColor: isActive('/invoices') ? 'var(--accent-primary)' : 'transparent',
-            color: isActive('/invoices') ? '#fff' : 'var(--text-secondary)'
-          }}>
-            Invoices
-          </Link>
-
-          <Link to="/reports" className="btn btn-secondary btn-sm" style={{
-            background: isActive('/reports') ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            borderColor: isActive('/reports') ? 'var(--accent-primary)' : 'transparent',
-            color: isActive('/reports') ? '#fff' : 'var(--text-secondary)'
-          }}>
-            Reports
-          </Link>
+          {/* Discount Policy Config: Admin only! */}
+          {hasAccess(['admin']) && (
+            <Link to="/admin/discount-config" className="btn btn-secondary btn-sm" style={{
+              background: isActive('/admin/discount-config') ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
+              borderColor: isActive('/admin/discount-config') ? '#a855f7' : 'transparent',
+              color: isActive('/admin/discount-config') ? '#fff' : 'var(--text-secondary)'
+            }}>
+              <Sliders size={15} color="#c084fc" /> Discount Rules
+            </Link>
+          )}
         </nav>
 
-        {/* Right Persona Switcher & Portal Preview */}
+        {/* Right Persona Profile & Switcher */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Link to="/portal/sample-portal-token" className="btn btn-secondary btn-sm" title="Open Customer Portal (S11)">
-            <ExternalLink size={14} /> Portal
-          </Link>
-
+          {/* Active User Card */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            padding: '4px 8px',
-            borderRadius: 8,
+            gap: 10,
+            padding: '4px 10px',
+            borderRadius: 10,
             background: 'rgba(255, 255, 255, 0.04)',
             border: '1px solid var(--border-subtle)'
           }}>
-            <UserCheck size={16} color="var(--accent-cyan)" />
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>
+                {user?.fullName || 'User'}
+              </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                {user?.territory || user?.division || user?.department || user?.email}
+              </div>
+            </div>
+
+            <Badge label={getRoleLabel(role)} variant={getRoleBadgeVariant(role)} size="sm" />
+          </div>
+
+          {/* Real-Time Role Switcher */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <select
               value={role}
               onChange={(e) => switchRole(e.target.value as UserRole)}
               style={{
-                background: 'transparent',
-                border: 'none',
+                background: 'rgba(15, 23, 42, 0.9)',
+                border: '1px solid var(--border-subtle)',
                 color: '#fff',
-                fontSize: '0.8rem',
+                fontSize: '0.78rem',
                 fontWeight: 600,
-                cursor: 'pointer',
-                padding: '2px 4px'
+                borderRadius: 8,
+                padding: '6px 10px',
+                cursor: 'pointer'
               }}
+              title="Instant Persona Switcher"
             >
-              <option value="sales_rep" style={{ background: '#0f172a' }}>Neeraj (Sales Rep)</option>
-              <option value="sales_manager" style={{ background: '#0f172a' }}>Atharva (Sales Manager)</option>
-              <option value="finance_director" style={{ background: '#0f172a' }}>Vignesh (Finance Director)</option>
-              <option value="admin" style={{ background: '#0f172a' }}>Admin (Superuser)</option>
+              <option value="sales_rep">💼 Sales Rep (Neeraj)</option>
+              <option value="sales_manager">🛡️ Sales Manager (Atharva)</option>
+              <option value="finance_director">📊 Finance Director (Vignesh)</option>
+              <option value="admin">⚙️ Administrator</option>
+              <option value="customer">🌐 Customer Portal</option>
             </select>
           </div>
+
+          {/* Logout Button */}
+          <button
+            onClick={handleLogout}
+            className="btn btn-secondary btn-sm"
+            title="Log Out"
+            style={{ padding: '6px 10px' }}
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </div>
     </header>

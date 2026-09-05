@@ -21,9 +21,53 @@ app.use(cors({
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// ── Health Check ───────────────────────────────────────────────────────────
+
+// ── Root & Health Check ───────────────────────────────────────────────────
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    name: "DealFlow360 API",
+    version: "1.0.0",
+    status: "online",
+    message: "DealFlow360 Intelligent Sales Operations & Governance Backend is active.",
+    endpoints: {
+      health: "/health",
+      apiBase: "/api",
+      auth: "/api/auth",
+      products: "/api/products",
+      quotations: "/api/quotations",
+      approvals: "/api/approvals",
+      fulfillment: "/api/fulfillment",
+      subscriptions: "/api/subscriptions",
+      invoices: "/api/invoices",
+      reports: "/api/reports"
+    }
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "healthy", service: "dealflow360-backend", timestamp: new Date().toISOString() });
+});
+
+app.get("/api", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "DealFlow360 API Root",
+    availableModules: [
+      "/api/auth",
+      "/api/products",
+      "/api/price-lists",
+      "/api/discount-rules",
+      "/api/approvals",
+      "/api/portal",
+      "/api/quotations",
+      "/api/deal-health",
+      "/api/fulfillment",
+      "/api/subscriptions",
+      "/api/invoices",
+      "/api/reports"
+    ]
+  });
 });
 
 // ── API Routes ─────────────────────────────────────────────────────────────
