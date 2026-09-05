@@ -2,6 +2,13 @@ import { Knex } from "knex";
 import bcrypt from "bcryptjs";
 
 export async function seed(knex: Knex): Promise<void> {
+  // Check if already seeded
+  const existingUsers = await knex("users").select("id");
+  if (existingUsers.length > 0) {
+    console.log("Initial data already seeded, skipping 001_initial_data...");
+    return;
+  }
+
   // Clear existing in reverse dependency order
   await knex("negotiation_comments").del();
   await knex("negotiation_requests").del();

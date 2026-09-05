@@ -8,6 +8,10 @@ import { portalRoutes } from "./portalRoutes";
 import { auditLogRoutes } from "./auditLogRoutes";
 import { quotationRoutes } from "./quotationRoutes";
 import { dealHealthRoutes } from "./dealHealthRoutes";
+import { fulfillmentRoutes } from "./fulfillmentRoutes";
+import { subscriptionRoutes } from "./subscriptionRoutes";
+import { invoiceRoutes } from "./invoiceRoutes";
+import { reportRoutes } from "./reportRoutes";
 
 export function mountAllRoutes(app: Express): void {
   app.use("/api/auth", authRoutes);
@@ -19,4 +23,8 @@ export function mountAllRoutes(app: Express): void {
   app.use("/api/audit-logs", auditLogRoutes);
   app.use("/api/quotations", quotationRoutes);
   app.use("/api/deal-health", dealHealthRoutes);
+  app.use("/api/fulfillment", fulfillmentRoutes);
+  app.use("/api/subscriptions", subscriptionRoutes);
+  app.use("/api/invoices", invoiceRoutes);
+  app.use("/api/reports", reportRoutes);
 }
