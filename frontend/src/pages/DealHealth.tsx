@@ -1,39 +1,62 @@
-
-import React, { useState } from 'react';
-import { Activity, Bell, AlertTriangle, ArrowRight, ShieldAlert, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { Activity, Bell, AlertTriangle, ShieldAlert, CheckCircle, RefreshCw, Play } from 'lucide-react';
 import { StatCard } from '../components/StatCard';
 import { Badge } from '../components/Badge';
+import { api } from '../api';
 
 export const DealHealth: React.FC = () => {
-  const [nudged, setNudged] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<any>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [nudgedAlertId, setNudgedAlertId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const alerts = [
-    {
-      id: 'dh-1',
-      quoteNumber: 'QT-2026-004',
-      customer: 'Apex Global Logistics',
-      salesRep: 'Neeraj Shetye',
-      type: 'STALLED_DEAL',
-      daysInactive: 16,
-      severity: 'HIGH',
-      description: 'Quote has remained in Draft status without customer touchpoint for >14 days (Rule 27).'
-    },
-    {
-      id: 'dh-2',
-      quoteNumber: 'QT-2026-005',
-      customer: 'BioTech Labs',
-      salesRep: 'Neeraj Shetye',
-      type: 'DISCOUNT_ANOMALY',
-      daysInactive: 4,
-      severity: 'MEDIUM',
-      description: 'Requested discount (27%) deviates by >1.5 standard deviations from rep 90-day rolling baseline (Rule 28).'
+  const fetchHealthData = async () => {
+    try {
+      setLoading(true);
+      setErrorMsg(null);
+      const data = await api.getDealHealthSummary();
+      setSummary(data.summary || {});
+      setAlerts(data.alerts || []);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to fetch deal health monitor metrics');
+    } finally {
+      setLoading(false);
     }
-  ];
-
-  const handleNudge = (id: string) => {
-    setNudged(id);
-    setTimeout(() => setNudged(null), 3000);
   };
+
+  useEffect(() => {
+    fetchHealthData();
+  }, []);
+
+  const handleRunEvaluation = async () => {
+    try {
+      setLoading(true);
+      setErrorMsg(null);
+      await api.evaluateDealHealth();
+      await fetchHealthData();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to evaluate deals');
+      setLoading(false);
+    }
+  };
+
+  const handleNudge = async (alertId: string) => {
+    try {
+      setErrorMsg(null);
+      await api.nudgeSalesRep(alertId);
+      setNudgedAlertId(alertId);
+      setTimeout(() => setNudgedAlertId(null), 4000);
+      await fetchHealthData();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to dispatch nudge to sales rep');
+    }
+  };
+
+  const stalledCount = summary?.stalledCount || 0;
+  const anomalyCount = summary?.anomalyCount || 0;
+  const slippageCount = summary?.slippageCount || 0;
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '32px 24px' }}>
@@ -44,11 +67,26 @@ export const DealHealth: React.FC = () => {
             Automated inactivity detection, discount anomaly tracking, and pipeline velocity audits (Atharva's Domain)
           </p>
         </div>
+
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button onClick={handleRunEvaluation} className="btn btn-primary btn-sm" title="Run Inactivity & Anomaly Scan">
+            <Play size={14} /> Run Deal Evaluation Scan
+          </button>
+          <button onClick={fetchHealthData} className="btn btn-secondary btn-sm" title="Refresh Deal Health Data">
+            <RefreshCw size={14} /> Refresh Metrics
+          </button>
+        </div>
       </div>
 
-      {nudged && (
+      {errorMsg && (
+        <div style={{ padding: 12, borderRadius: 8, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid var(--danger-border)', color: '#f87171', marginBottom: 20 }}>
+          {errorMsg}
+        </div>
+      )}
+
+      {nudgedAlertId && (
         <div style={{ padding: 12, borderRadius: 8, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid var(--success-border)', color: '#34d399', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <CheckCircle size={18} /> Automated nudge notification dispatched to sales rep.
+          <CheckCircle size={18} /> Automated nudge notification dispatched to assigned sales rep & logged in audit trail.
         </div>
       )}
 
@@ -56,19 +94,19 @@ export const DealHealth: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 32 }}>
         <StatCard
           title="Stalled Deals (>14d)"
-          value="2 Deals"
-          subtext="$72,000 pipeline value"
+          value={`${stalledCount} Deals`}
+          subtext="Inactivity timer exceeded"
           icon={<AlertTriangle size={22} color="var(--warning)" />}
         />
         <StatCard
           title="Discount Anomalies (>1.5σ)"
-          value="1 Deal"
+          value={`${anomalyCount} Deals`}
           subtext="Excessive discount vs rep baseline"
           icon={<ShieldAlert size={22} color="var(--danger)" />}
         />
         <StatCard
           title="Slippage Risk"
-          value="1 Deal"
+          value={`${slippageCount} Deals`}
           subtext="Expected close date passed"
           icon={<Activity size={22} color="var(--accent-cyan)" />}
         />
@@ -77,42 +115,66 @@ export const DealHealth: React.FC = () => {
       {/* Flagged Deals Table */}
       <div className="glass-panel" style={{ padding: 24 }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginBottom: 16 }}>
-          Active Deal Alerts & Escalations
+          Active Deal Health Alerts & Escalations
         </h3>
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Quote #</th>
-                <th>Customer</th>
-                <th>Assigned Rep</th>
-                <th>Alert Type</th>
-                <th>Inactivity</th>
-                <th>Severity</th>
-                <th>Audit Finding</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {alerts.map(a => (
-                <tr key={a.id}>
-                  <td style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>{a.quoteNumber}</td>
-                  <td style={{ fontWeight: 600, color: '#fff' }}>{a.customer}</td>
-                  <td>{a.salesRep}</td>
-                  <td><Badge label={a.type.replace('_', ' ')} variant="warning" /></td>
-                  <td>{a.daysInactive} days</td>
-                  <td><Badge label={a.severity} variant={a.severity === 'HIGH' ? 'danger' : 'warning'} /></td>
-                  <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{a.description}</td>
-                  <td>
-                    <button onClick={() => handleNudge(a.id)} className="btn btn-secondary btn-sm">
-                      <Bell size={13} /> Nudge Rep
-                    </button>
-                  </td>
+        {loading ? (
+          <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>
+            Evaluating active deal health metrics...
+          </div>
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Quotation</th>
+                  <th>Alert Type</th>
+                  <th>Severity</th>
+                  <th>Status</th>
+                  <th>Audit Finding / Finding Details</th>
+                  <th>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {alerts.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>
+                      No active deal health alerts detected. All deals healthy!
+                    </td>
+                  </tr>
+                ) : (
+                  alerts.map(a => {
+                    const alertType = a.alert_type || a.type || 'ALERT';
+                    const severity = a.severity || 'MEDIUM';
+                    const isNudged = a.status === 'NUDGE_SENT';
+
+                    return (
+                      <tr key={a.id}>
+                        <td style={{ fontWeight: 600 }}>
+                          <Link to={`/quotations/${a.quotation_id || a.quotationId}`} style={{ color: 'var(--accent-cyan)' }}>
+                            {a.quoteNumber || a.quotation_id || 'View Quotation'}
+                          </Link>
+                        </td>
+                        <td><Badge label={alertType.replace(/_/g, ' ')} variant={alertType.includes('ANOMALY') ? 'danger' : 'warning'} /></td>
+                        <td><Badge label={severity} variant={severity === 'HIGH' ? 'danger' : 'warning'} /></td>
+                        <td><Badge label={a.status || 'OPEN'} variant={isNudged ? 'info' : 'warning'} /></td>
+                        <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{a.message || a.description}</td>
+                        <td>
+                          <button
+                            onClick={() => handleNudge(a.id)}
+                            disabled={isNudged}
+                            className={`btn ${isNudged ? 'btn-secondary' : 'btn-primary'} btn-sm`}
+                          >
+                            <Bell size={13} /> {isNudged ? 'Nudge Sent' : 'Nudge Rep'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

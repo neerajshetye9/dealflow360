@@ -9,6 +9,8 @@ router.get("/", authenticateJwt, QuotationController.list);
 router.get("/:id", authenticateJwt, QuotationController.getById);
 router.post("/", authenticateJwt, QuotationController.create);
 router.post("/:id/lines", authenticateJwt, QuotationController.addLine);
+router.patch("/lines/:lineId", authenticateJwt, QuotationController.updateLine);
+router.delete("/lines/:lineId", authenticateJwt, QuotationController.deleteLine);
 router.post("/:id/submit", authenticateJwt, QuotationController.submit);
 router.post("/:id/revision", authenticateJwt, QuotationController.revision);
 

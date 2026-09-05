@@ -151,4 +151,76 @@ export class ApprovalEngineService {
       .orderBy("created_at", "desc");
     return decisions;
   }
+
+  public static async triggerReApproval(
+    quotationId: string,
+    reason: string,
+    actorIp?: string
+  ): Promise<{ approvalRoute: string; decisions: ApprovalDecisionRecord[] }> {
+    const { quotationsTable, quotationLinesTable } = await import("../models/Quotation.model");
+
+    // 1. Update quotation status to UNDER_REVIEW
+    await quotationsTable().where({ id: quotationId }).update({
+      approval_status: "UNDER_REVIEW",
+      updated_at: new Date(),
+    });
+
+    // 2. Void existing PENDING decisions
+    await approvalDecisionsTable()
+      .where({ quotation_id: quotationId, status: "PENDING" })
+      .update({
+        status: "RETURNED",
+        decision_reason: `Superceded by re-approval trigger: ${reason}`,
+        decided_at: new Date(),
+        updated_at: new Date(),
+      });
+
+    // 3. Fetch lines and recalculate risk score
+    const quotation = await quotationsTable().where({ id: quotationId }).first();
+    const lines = await quotationLinesTable().where({ quotation_id: quotationId });
+
+    if (!quotation) {
+      throw new Error(`Quotation not found: ${quotationId}`);
+    }
+
+    const lineInputs = lines.map((l) => ({
+      productId: l.product_id,
+      categoryId: (l as any).category_id || "",
+      quantity: Number(l.quantity),
+      unitPrice: Number(l.unit_price),
+      unitCost: Number(l.unit_cost),
+      requestedDiscountPercent: Number(l.discount_percent),
+    }));
+
+    const riskResult = await DiscountGovernanceService.computeBlendedRiskScore(
+      quotation.customer_id,
+      lineInputs
+    );
+
+    // 4. Update quotation risk metrics
+    await quotationsTable().where({ id: quotationId }).update({
+      blended_risk_score: riskResult.blendedRiskScore,
+      margin_percent: riskResult.weightedMarginPercent,
+    });
+
+    // 5. Initiate fresh workflow
+    const result = await this.initiateApprovalWorkflow(
+      quotationId,
+      riskResult,
+      undefined,
+      actorIp
+    );
+
+    await AuditLogService.recordEvent(
+      null,
+      actorIp || "127.0.0.1",
+      "QUOTATION",
+      quotationId,
+      "REAPPROVAL_TRIGGERED",
+      null,
+      { reason, route: result.approvalRoute, blendedRiskScore: riskResult.blendedRiskScore }
+    );
+
+    return result;
+  }
 }

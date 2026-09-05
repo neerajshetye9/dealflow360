@@ -28,7 +28,7 @@ export class NegotiationService {
     notes?: string,
     comments?: Array<{ quotationLineId?: string; commentText: string }>,
     actorIp?: string
-  ): Promise<NegotiationRequestRecord> {
+  ): Promise<NegotiationRequestRecord & { needsReapproval?: boolean }> {
     const { negotiationRequestId, quotationId } = await AuthService.verifyCustomerPortalToken(portalToken);
     const current = await negotiationRequestsTable().where({ id: negotiationRequestId }).first();
     if (!current || current.status !== "ACTIVE") {
@@ -66,7 +66,47 @@ export class NegotiationService {
       updated
     );
 
-    return updated;
+    // Re-approval trigger: Recalculate blended risk & check if counter-proposal
+    // exceeds governance thresholds (soul.md 2.3, edge_cases.md CP-002)
+    let needsReapproval = false;
+    try {
+      const { quotationLinesTable: qlTable } = await import("../models/Quotation.model");
+      const { quotationsTable: qTable } = await import("../models/Quotation.model");
+      const quotation = await qTable().where({ id: quotationId }).first();
+      const lines = await qlTable().where({ quotation_id: quotationId });
+
+      if (quotation && lines.length > 0) {
+        const lineInputs = lines.map((l: any) => ({
+          productId: l.product_id,
+          categoryId: l.category_id || "",
+          quantity: Number(l.quantity),
+          unitPrice: Number(l.unit_price),
+          unitCost: Number(l.unit_cost),
+          requestedDiscountPercent: counterDiscountPercent,
+        }));
+
+        const riskResult = await DiscountGovernanceService.computeBlendedRiskScore(
+          quotation.customer_id,
+          lineInputs
+        );
+
+        // If risk score no longer auto-approved OR margin < 15%, force re-approval
+        if (riskResult.approvalRoute !== "AUTO_APPROVED" || riskResult.weightedMarginPercent < 15.0) {
+          needsReapproval = true;
+          // Trigger re-approval by resetting status
+          await ApprovalEngineService.triggerReApproval(
+            quotationId,
+            `Customer counter-proposal: ${counterDiscountPercent}% discount. Blended risk: ${riskResult.blendedRiskScore}, margin: ${riskResult.weightedMarginPercent}%`,
+            actorIp || "127.0.0.1"
+          );
+        }
+      }
+    } catch (reapprovalErr) {
+      // Log but don't block — re-approval is a governance safeguard
+      console.error("Re-approval trigger error:", reapprovalErr);
+    }
+
+    return { ...updated, needsReapproval };
   }
 
   public static async addSalesRepComment(

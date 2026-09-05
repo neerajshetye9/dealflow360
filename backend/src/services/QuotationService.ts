@@ -119,6 +119,76 @@ export class QuotationService {
     return line;
   }
 
+  public static async updateLineItem(
+    lineId: string,
+    quantity?: number,
+    discountPercent?: number,
+    actorId?: string,
+    actorIp?: string
+  ): Promise<QuotationLineRecord> {
+    const line = await quotationLinesTable().where({ id: lineId }).first();
+    if (!line) throw new Error("Quotation line not found");
+
+    const newQty = quantity !== undefined ? Math.max(1, quantity) : line.quantity;
+    const newDiscount = discountPercent !== undefined ? Math.max(0, Math.min(100, discountPercent)) : Number(line.discount_percent);
+
+    const unitPrice = Number(line.unit_price);
+    const unitCost = Number(line.unit_cost);
+    const netUnitPrice = unitPrice * (1 - newDiscount / 100);
+    const lineTotal = netUnitPrice * newQty;
+    const calculatedMargin = netUnitPrice > 0 ? ((netUnitPrice - unitCost) / netUnitPrice) * 100 : 0;
+
+    const [updated] = await quotationLinesTable()
+      .where({ id: lineId })
+      .update({
+        quantity: newQty,
+        discount_percent: newDiscount,
+        line_total: Number(lineTotal.toFixed(2)),
+        calculated_margin_percent: Number(calculatedMargin.toFixed(2)),
+      })
+      .returning("*");
+
+    await this.recalculateQuotationTotals(line.quotation_id);
+
+    await AuditLogService.recordEvent(
+      actorId || null,
+      actorIp || "127.0.0.1",
+      "QUOTATION_LINE",
+      lineId,
+      "QUOTATION_LINE_UPDATED",
+      line,
+      updated
+    );
+
+    return updated;
+  }
+
+  public static async deleteLineItem(
+    lineId: string,
+    actorId?: string,
+    actorIp?: string
+  ): Promise<{ success: boolean; quotationId: string }> {
+    const line = await quotationLinesTable().where({ id: lineId }).first();
+    if (!line) throw new Error("Quotation line not found");
+
+    const quotationId = line.quotation_id;
+    await quotationLinesTable().where({ id: lineId }).delete();
+
+    await this.recalculateQuotationTotals(quotationId);
+
+    await AuditLogService.recordEvent(
+      actorId || null,
+      actorIp || "127.0.0.1",
+      "QUOTATION_LINE",
+      lineId,
+      "QUOTATION_LINE_DELETED",
+      line,
+      null
+    );
+
+    return { success: true, quotationId };
+  }
+
   public static async recalculateQuotationTotals(quotationId: string): Promise<QuotationRecord> {
     const quotation = await quotationsTable().where({ id: quotationId }).first();
     if (!quotation) throw new Error("Quotation not found");

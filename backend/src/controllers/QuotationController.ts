@@ -61,6 +61,33 @@ export class QuotationController {
     }
   }
 
+  public static async updateLine(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { lineId } = req.params;
+      const { quantity, discountPercent } = req.body;
+      const actorId = req.user?.id;
+      const actorIp = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress;
+
+      const updated = await QuotationService.updateLineItem(lineId, quantity, discountPercent, actorId, actorIp);
+      res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  public static async deleteLine(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { lineId } = req.params;
+      const actorId = req.user?.id;
+      const actorIp = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress;
+
+      const result = await QuotationService.deleteLineItem(lineId, actorId, actorIp);
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   public static async submit(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;

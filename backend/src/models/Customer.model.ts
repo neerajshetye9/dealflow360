@@ -19,6 +19,7 @@ export interface CustomerRecord {
   tier_id: string;
   credit_rating: string;
   credit_limit: number;
+  loyalty_score?: number | null;
   created_at: Date;
   updated_at: Date;
 }
