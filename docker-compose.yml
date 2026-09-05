@@ -1,21 +1,52 @@
-﻿services:
+version: "3.9"
+
+services:
   postgres:
     image: postgres:16-alpine
     container_name: dealflow360_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: dealflow_user
-      POSTGRES_PASSWORD: dealflow_password
-      POSTGRES_DB: dealflow360_db
+      POSTGRES_PASSWORD: dealflow_pass
+      POSTGRES_DB: dealflow360
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dealflow_user -d dealflow360_db"]
+      test: ["CMD-SHELL", "pg_isready -U dealflow_user -d dealflow360"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  backend:
+    build: ./backend
+    container_name: dealflow360_backend
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DATABASE_URL: postgresql://dealflow_user:dealflow_pass@postgres:5432/dealflow360
+      JWT_ACCESS_SECRET: dealflow360_access_secret_change_in_production_64chars_minimum_ok
+      JWT_REFRESH_SECRET: dealflow360_refresh_secret_change_in_production_64chars_minimum_ok
+      JWT_ACCESS_EXPIRES_IN: 60m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      CUSTOMER_PORTAL_TOKEN_EXPIRES_HOURS: 72
+      FRONTEND_ORIGIN: http://localhost:3000
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: dealflow360_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

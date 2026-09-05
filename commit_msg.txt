@@ -1,1 +1,1 @@
-feat(sales-workspace): wire live API integrations, relationship multipliers, net profit guardrail, and customer counter proposal re-approval
+feat(docker): add Dockerfiles and full multi-container docker-compose setup for postgres, backend, and frontend
