@@ -1,12 +1,8 @@
 import { db } from "../config/database";
 
 async function main(): Promise<void> {
-  const cols = await db.raw(\`
-    SELECT column_name, data_type 
-    FROM information_schema.columns 
-    WHERE table_name='quotations' 
-    ORDER BY ordinal_position
-  \`);
+  const sql = "SELECT column_name, data_type FROM information_schema.columns WHERE table_name='quotations' ORDER BY ordinal_position";
+  const cols = await db.raw(sql);
   console.log("QUOTATIONS columns:", JSON.stringify(cols.rows.map((r: any) => r.column_name), null, 2));
   await db.destroy();
 }
