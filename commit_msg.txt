@@ -1,1 +1,1 @@
-fix(docker): update DB SSL config for containerized environment and update Dockerfile CMD
+fix(docker): remove explicit container_name attributes to allow automatic Compose namespacing
