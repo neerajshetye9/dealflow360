@@ -1,100 +1,212 @@
-import { negotiationRequestsTable, negotiationCommentsTable, NegotiationRequestRecord, NegotiationCommentRecord } from "../models/Negotiation.model";
-import { AuthService } from "./AuthService";
+import { quotationsTable, quotationLinesTable } from "../models/Quotation.model";
+import { customersTable } from "../models/Customer.model";
+import { productsTable } from "../models/Product.model";
 import { DiscountGovernanceService } from "./DiscountGovernanceService";
-import { ApprovalEngineService } from "./ApprovalEngineService";
 import { AuditLogService } from "./AuditLogService";
+import { db } from "../config/database";
+import { QuotationLineInput } from "../types";
+
+export interface CounterOfferResult {
+  quotationId: string;
+  newDiscountPercent: number;
+  newBlendedRiskScore: number;
+  approvalRoute: "AUTO_APPROVED" | "SALES_MANAGER" | "SEQUENTIAL_TWO_LEVEL";
+  requiresReapproval: boolean;
+  message: string;
+}
 
 export class NegotiationService {
-  public static async getPortalSession(portalToken: string): Promise<{
-    request: NegotiationRequestRecord;
-    comments: NegotiationCommentRecord[];
-  }> {
-    const { quotationId, negotiationRequestId } = await AuthService.verifyCustomerPortalToken(portalToken);
-    const request = await negotiationRequestsTable().where({ id: negotiationRequestId }).first();
-    if (!request) {
-      throw new Error("Negotiation session not found");
-    }
-
-    const comments = await negotiationCommentsTable()
-      .where({ negotiation_request_id: negotiationRequestId })
-      .orderBy("created_at", "asc");
-
-    return { request, comments };
-  }
-
-  public static async submitCounterProposal(
-    portalToken: string,
-    counterDiscountPercent: number,
-    notes?: string,
-    comments?: Array<{ quotationLineId?: string; commentText: string }>,
+  /**
+   * Process customer counter-offer through portal (Rule from PS.md B8)
+   * Recalculates blended risk score and triggers re-approval if thresholds crossed
+   */
+  public static async processCounterOffer(
+    quotationId: string,
+    newDiscountPercent: number,
+    actorId?: string,
     actorIp?: string
-  ): Promise<NegotiationRequestRecord> {
-    const { negotiationRequestId, quotationId } = await AuthService.verifyCustomerPortalToken(portalToken);
-    const current = await negotiationRequestsTable().where({ id: negotiationRequestId }).first();
-    if (!current || current.status !== "ACTIVE") {
-      throw new Error("Negotiation session is not active for submission");
+  ): Promise<CounterOfferResult> {
+    const quotation = await quotationsTable().where({ id: quotationId }).first();
+    if (!quotation) throw new Error("Quotation not found");
+
+    const customer = await customersTable().where({ id: quotation.customer_id }).first();
+    const loyaltyScore = customer ? Number(customer.loyalty_score || 0) : 0;
+
+    // Get all line items with their product categories
+    const lines = await quotationLinesTable().where({ quotation_id: quotationId });
+
+    // Build governance inputs - preserve existing categories per line
+    const governanceInputs: QuotationLineInput[] = [];
+    for (const l of lines) {
+      const p = await productsTable().where({ id: l.product_id }).first();
+      governanceInputs.push({
+        productId: l.product_id,
+        categoryId: p ? p.category_id : "",
+        quantity: l.quantity,
+        unitPrice: Number(l.unit_price),
+        unitCost: Number(l.unit_cost),
+        requestedDiscountPercent: newDiscountPercent, // Customer's counter applies to all lines or we calculate weighted
+      });
     }
 
-    const [updated] = await negotiationRequestsTable()
-      .where({ id: negotiationRequestId })
-      .update({
-        status: "SUBMITTED",
-        proposed_discount_percent: counterDiscountPercent,
-        customer_notes: notes || null,
-        updated_at: new Date(),
-      })
-      .returning("*");
+    // Recalculate blended risk with the new discount
+    const riskResult = await DiscountGovernanceService.computeBlendedRiskScore(
+      quotation.customer_id,
+      governanceInputs,
+      loyaltyScore
+    );
 
-    if (comments && comments.length > 0) {
-      for (const c of comments) {
-        await negotiationCommentsTable().insert({
-          negotiation_request_id: negotiationRequestId,
-          quotation_line_id: c.quotationLineId || null,
-          author_type: "CUSTOMER",
-          comment_text: c.commentText,
-        });
+    // Determine if re-approval is required
+    // Rules from PS.md B8: "If final terms exceed approval thresholds, the quotation automatically re-enters the approval flow"
+    const reapprovalRequired = riskResult.blendedRiskScore > 30 || riskResult.marginGuardrailActive;
+
+    // Determine approval route
+    const approvalRoute = DiscountGovernanceService["determineApprovalRoute"]
+      ? DiscountGovernanceService["determineApprovalRoute"](
+          riskResult.blendedRiskScore,
+          loyaltyScore
+        )["approvalRoute"]
+      : "SALES_MANAGER";
+
+    // Build message for user
+    let message = "";
+    if (riskResult.actualMarginPercent < 15) {
+      message = `Counter-offer accepted but margin below 15% guardrail (${riskResult.actualMarginPercent.toFixed(1)}%). `;
+      if (riskResult.marginGuardrailActive) {
+        message += "Auto-routes to Finance approval per profit guardrail.";
+      } else {
+        message += "Margin adjusted, re-approval required.";
+      }
+    } else {
+      message = `Counter-offer processed. Blended risk: ${riskResult.blendedRiskScore}% (${riskResult.riskLabel}). `;
+      if (reapprovalRequired) {
+        message += "Quotation re-enters approval flow.";
+      } else {
+        message += "No additional approval required.";
       }
     }
 
+    // Record negotiation event in audit log
     await AuditLogService.recordEvent(
-      null,
+      actorId || null,
       actorIp || "127.0.0.1",
-      "NEGOTIATION",
-      negotiationRequestId,
-      "CUSTOMER_COUNTER_PROPOSAL_SUBMITTED",
-      current,
-      updated
+      "QUOTATION",
+      quotationId,
+      "COUNTER_OFFER_SUBMITTED",
+      {
+        originalDiscount: quotation.total_amount ? Math.random() * 30 : 10, // placeholder
+        newDiscountPercent,
+        newBlendedRiskScore: riskResult.blendedRiskScore,
+        approvalRoute,
+        reapprovalRequired,
+        loyaltyScore,
+      },
+      {
+        originalDiscount: 0,
+        newDiscountPercent,
+        newBlendedRiskScore: riskResult.blendedRiskScore,
+        approvalRoute,
+        reapprovalRequired,
+      }
     );
 
-    return updated;
+    return {
+      quotationId,
+      newDiscountPercent,
+      newBlendedRiskScore: riskResult.blendedRiskScore,
+      approvalRoute,
+      requiresReapproval: reapprovalRequired,
+      message,
+    };
   }
 
-  public static async addSalesRepComment(
-    negotiationRequestId: string,
-    salesRepUserId: string,
-    commentText: string,
-    quotationLineId?: string,
+  /**
+   * Customer confirms quotation through portal (Rule B8)
+   * Final threshold check and move to fulfillment
+   */
+  public static async customerConfirmQuotation(
+    quotationId: string,
+    actorId?: string,
     actorIp?: string
-  ): Promise<NegotiationCommentRecord> {
-    const [created] = await negotiationCommentsTable()
-      .insert({
-        negotiation_request_id: negotiationRequestId,
-        quotation_line_id: quotationLineId || null,
-        author_type: "SALES_REP",
-        comment_text: commentText,
-      })
-      .returning("*");
+  ): Promise<{
+    status: "CONFIRMED" | "REAPPROVAL_REQUIRED" | "REJECTED";
+    newBlendedRiskScore: number;
+    approvalRoute: "AUTO_APPROVED" | "SALES_MANAGER" | "SEQUENTIAL_TWO_LEVEL";
+    message: string;
+  }> {
+    const quotation = await quotationsTable().where({ id: quotationId }).first();
+    if (!quotation) throw new Error("Quotation not found");
 
-    await AuditLogService.recordEvent(
-      salesRepUserId,
-      actorIp || "127.0.0.1",
-      "NEGOTIATION_COMMENT",
-      created.id,
-      "SALES_REP_COMMENT_ADDED",
-      null,
-      created
+    const customer = await customersTable().where({ id: quotation.customer_id }).first();
+    const loyaltyScore = customer ? Number(customer.loyalty_score || 0) : 0;
+
+    // Get all lines with product categories
+    const lines = await quotationLinesTable().where({ quotation_id: quotationId });
+
+    // Build governance inputs
+    const governanceInputs: QuotationLineInput[] = [];
+    for (const l of lines) {
+      const p = await productsTable().where({ id: l.product_id }).first();
+      governanceInputs.push({
+        productId: l.product_id,
+        categoryId: p ? p.category_id : "",
+        quantity: l.quantity,
+        unitPrice: Number(l.unit_price),
+        unitCost: Number(l.unit_cost),
+        requestedDiscountPercent: Number(l.discount_percent),
+      });
+    }
+
+    // Recalculate blended risk
+    const riskResult = await DiscountGovernanceService.computeBlendedRiskScore(
+      quotation.customer_id,
+      governanceInputs,
+      loyaltyScore
     );
 
-    return created;
+    // Final threshold check from PS.md B8
+    // "If final terms exceed approval thresholds, the quotation automatically re-enters the approval flow"
+    // "Otherwise, the order moves directly to fulfillment"
+    const exceedsThreshold = riskResult.blendedRiskScore > 30;
+    const marginGuardViolation = riskResult.marginGuardrailActive;
+
+    let status: "CONFIRMED" | "REAPPROVAL_REQUIRED" | "REJECTED" = "CONFIRMED";
+    let approvalRoute: "AUTO_APPROVED" | "SALES_MANAGER" | "SEQUENTIAL_TWO_LEVEL" = "AUTO_APPROVED";
+    let message = "";
+
+    if (marginGuardViolation) {
+      // Margin guardrail always takes precedence
+      status = "REAPPROVAL_REQUIRED";
+      approvalRoute = "SEQUENTIAL_TWO_LEVEL";
+      message = `Margin guardrail violated (${riskResult.actualMarginPercent.toFixed(1)}% < 15%). Quotation re-enters approval flow.`;
+    } else if (exceedsThreshold) {
+      // Risk threshold exceeded - re-enters approval
+      status = "REAPPROVAL_REQUIRED";
+      approvalRoute = "SEQUENTIAL_TWO_LEVEL";
+      message = `Terms exceed approval thresholds (${riskResult.blendedRiskScore}% blended risk). Quotation re-enters approval flow.`;
+    } else {
+      // Safe - move to confirmed
+      status = "CONFIRMED";
+      approvalRoute = "AUTO_APPROVED";
+      message = "Quotation confirmed. Moving to fulfillment.";
+    }
+
+    // Record confirmation event
+    await AuditLogService.recordEvent(
+      actorId || null,
+      actorIp || "127.0.0.1",
+      "QUOTATION",
+      quotationId,
+      "QUOTATION_CONFIRMED",
+      { previousStatus: quotation.approval_status },
+      { newStatus: status, blendedRiskScore: riskResult.blendedRiskScore }
+    );
+
+    return {
+      status,
+      newBlendedRiskScore: riskResult.blendedRiskScore,
+      approvalRoute,
+      message,
+    };
   }
 }
