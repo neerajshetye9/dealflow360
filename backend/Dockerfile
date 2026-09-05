@@ -10,4 +10,4 @@ RUN npm run build
 
 EXPOSE 4000
 
-CMD ["sh", "-c", "npx knex migrate:latest --knexfile dist/config/knexfile.js && npx knex seed:run --knexfile dist/config/knexfile.js && npm start"]
+CMD ["sh", "-c", "npx ts-node node_modules/knex/bin/cli.js migrate:latest --knexfile src/config/knexfile.ts && npx ts-node node_modules/knex/bin/cli.js seed:run --knexfile src/config/knexfile.ts && npm start"]

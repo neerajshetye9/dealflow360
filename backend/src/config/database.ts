@@ -1,4 +1,4 @@
-﻿import knex from "knex";
+import knex from "knex";
 import { env } from "./environment";
 import { logger } from "./logger";
 
@@ -6,7 +6,7 @@ export const db = knex({
   client: "pg",
   connection: {
     connectionString: env.DATABASE_URL,
-    ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: true } : false,
+    ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false,
   },
   pool: {
     min: 2,
