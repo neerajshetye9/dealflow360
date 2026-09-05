@@ -1,4 +1,9 @@
-﻿# DealFlow360 Helper: Pre-Push Security & Compliance Check
+﻿# Ensure Git is found on PATH
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    $userPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    $env:Path = "$userPath;$env:Path"
+}
+
 $branch = git branch --show-current
 $uName = git config --local user.name
 $uEmail = git config --local user.email

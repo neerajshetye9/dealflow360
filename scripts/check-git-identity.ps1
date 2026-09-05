@@ -1,5 +1,10 @@
-﻿# DealFlow360 Helper: Check Local Git Identity and Remote
-$currentDir = Get-Location
+﻿# Ensure Git is found on PATH
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    $userPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    $env:Path = "$userPath;$env:Path"
+}
+
+$currentDir = (Get-Location).Path
 $uName = git config --local user.name
 $uEmail = git config --local user.email
 $remoteUrl = git remote get-url origin
@@ -12,7 +17,6 @@ Write-Host "Git Author:        $uName" -ForegroundColor Green
 Write-Host "Git Email:         $uEmail" -ForegroundColor Green
 Write-Host "Remote URL:        $remoteUrl" -ForegroundColor Gray
 
-# Validate identity match
 if ($currentDir -like "*dealflow-neeraj*" -and ($uName -ne "neerajshetye9" -or $remoteUrl -notlike "*github-neeraj*")) {
     Write-Host "[WARNING] Identity or SSH remote mismatch for Neeraj repository!" -ForegroundColor Red
 } elseif ($currentDir -like "*dealflow-atharva*" -and ($uName -ne "atharvashirke18" -or $remoteUrl -notlike "*github-atharva*")) {

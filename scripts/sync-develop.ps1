@@ -1,4 +1,9 @@
-﻿# DealFlow360 Helper: Safely sync develop and merge into current feature branch
+﻿# Ensure Git is found on PATH
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    $userPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    $env:Path = "$userPath;$env:Path"
+}
+
 $currentBranch = git branch --show-current
 if (-not $currentBranch) {
     Write-Host "Error: Not inside a Git repository." -ForegroundColor Red
